@@ -2,13 +2,13 @@ import ChatList from '@/components/shared/chat-list/ChatList'
 import ChatFallback from '@/components/shared/chat/ChatFallback'
 import React from 'react'
 
-const page = () => {
+const Page = () => {
   return (
     <>
-      <ChatList title='Friends'>Friends Page</ChatList>
+      <ChatList title='Friends' SearchPlaceholder='Search Friends...'>Friends Page</ChatList>
       <ChatFallback></ChatFallback>
     </>
   )
 }
 
-export default page
+export default Page
