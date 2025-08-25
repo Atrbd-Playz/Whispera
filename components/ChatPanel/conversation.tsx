@@ -12,7 +12,11 @@ const Conversation = ({ conversation }: { conversation: any }) => {
     const lastMessage = conversation.lastMessage;
     const lastMessageType = lastMessage?.messageType;
     const me = useQuery(api.users.getMe);
-    const sender = useQuery(api.users.getUserById, { id: lastMessage?.sender });
+    const sender = useQuery(
+        api.users.getUserById,
+        lastMessage?.sender ? { id: lastMessage.sender } : "skip"
+    );
+
 
     const { setSelectedConversation, selectedConversation } = useConversationStore();
 
