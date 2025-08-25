@@ -1,10 +1,10 @@
 import ChatFallback from '@/components/shared/chat/ChatFallback'
 import React from 'react'
 
-const Page = () => {
+const page = () => {
   return (
     <ChatFallback/>
   )
 }
 
-export default Page
+export default page

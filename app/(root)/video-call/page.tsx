@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function VideoCallPage() {
+export default function AudioCallPage() {
     return (
         <div
             style={{

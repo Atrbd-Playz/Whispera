@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation'
 
 
 
-function Page() {
+function page() {
 
   const { selectedConversation, setSelectedConversation } = useConversationStore();
   
@@ -42,4 +42,4 @@ function Page() {
   
 
 
-export default Page
+export default page
