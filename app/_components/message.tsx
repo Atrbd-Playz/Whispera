@@ -353,7 +353,7 @@ const TextMessage = ({ message }: { message: IMessage }) => {
   const isLong = message.content.length > 400; // adjust threshold as needed
 
   return (
-    <div className="max-w-[75%]">
+    <div className="w-full">
       <p
         className={`mr-2 text-sm font-light whitespace-pre-wrap break-words break-all ${
           !expanded && isLong ? "line-clamp-5" : ""
