@@ -336,6 +336,8 @@ const MessageTime = ({ time, fromMe, delivered, seen }: { time: string; fromMe: 
 };
 
 const TextMessage = ({ message }: { message: IMessage }) => {
+  const [expanded, setExpanded] = useState(false);
+
   // Regex patterns
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
@@ -343,13 +345,20 @@ const TextMessage = ({ message }: { message: IMessage }) => {
   const mentionRegex = /(@\w+)/g;
   const hashtagRegex = /(#\w+)/g;
 
-  // Combine into one big regex (order matters: url > email > phone > mention > hashtag)
+  // Combined regex (order matters)
   const combinedRegex =
     /(https?:\/\/[^\s]+)|([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})|(\+?\d[\d\s.-]{7,}\d)|(@\w+)|(#\w+)/g;
 
+  // Decide if message is "too long"
+  const isLong = message.content.length > 400; // adjust threshold as needed
+
   return (
-    <div>
-      <p className="mr-2 text-sm font-light whitespace-pre-wrap break-words">
+    <div className="max-w-[75%]">
+      <p
+        className={`mr-2 text-sm font-light whitespace-pre-wrap break-words break-all ${
+          !expanded && isLong ? "line-clamp-5" : ""
+        }`}
+      >
         {message.content.split(combinedRegex).map((part, idx) => {
           if (!part) return null;
 
@@ -360,7 +369,7 @@ const TextMessage = ({ message }: { message: IMessage }) => {
                 href={part}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-500 underline hover:text-blue-600 transition-colors"
+                className="text-blue-500 underline hover:text-blue-600 transition-colors break-all"
               >
                 {part}
               </a>
@@ -370,7 +379,7 @@ const TextMessage = ({ message }: { message: IMessage }) => {
               <a
                 key={idx}
                 href={`mailto:${part}`}
-                className="text-purple-500 underline hover:text-purple-600 transition-colors"
+                className="text-purple-500 underline hover:text-purple-600 transition-colors break-all"
               >
                 {part}
               </a>
@@ -380,7 +389,7 @@ const TextMessage = ({ message }: { message: IMessage }) => {
               <a
                 key={idx}
                 href={`tel:${part.replace(/\s|-/g, "")}`}
-                className="text-green-500 underline hover:text-green-600 transition-colors"
+                className="text-green-500 underline hover:text-green-600 transition-colors break-all"
               >
                 {part}
               </a>
@@ -389,7 +398,7 @@ const TextMessage = ({ message }: { message: IMessage }) => {
             return (
               <span
                 key={idx}
-                className="text-sky-500 font-medium cursor-pointer hover:underline"
+                className="text-sky-500 font-medium cursor-pointer hover:underline break-all"
               >
                 {part}
               </span>
@@ -398,17 +407,26 @@ const TextMessage = ({ message }: { message: IMessage }) => {
             return (
               <span
                 key={idx}
-                className="text-pink-500 font-medium cursor-pointer hover:underline"
+                className="text-pink-500 font-medium cursor-pointer hover:underline break-all"
               >
                 {part}
               </span>
             );
           }
 
-          return part; // Plain text
+          return part; // plain text
         })}
       </p>
+
+      {/* Expand/Collapse Button */}
+      {isLong && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="text-xs text-blue-500 hover:underline mt-1"
+        >
+          {expanded ? "See less" : "See more"}
+        </button>
+      )}
     </div>
   );
 };
-
