@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
     Dialog,
@@ -33,8 +34,11 @@ const UserListDialog = () => {
     const generateUploadUrl = useMutation(api.conversations.generateUploadUrl);
     const me = useQuery(api.users.getMe);
     const users = useQuery(api.users.getUsers);
+    const conversations = useQuery(api.conversations.getMyConversations);
+    const router = useRouter();
 
     const { setSelectedConversation } = useConversationStore();
+    const [query, setQuery] = useState("");
 
     const handleCreateConversation = async () => {
         if (selectedUsers.length === 0) return;
@@ -101,6 +105,42 @@ const UserListDialog = () => {
         setGroupName("");
         setSelectedImage(null);
         setRenderedImage("");
+        setQuery("");
+    };
+
+    const filteredUsers = (users || []).filter((u) => {
+        if (!query.trim()) return true;
+        const q = query.toLowerCase();
+        return (u.name || u.email || "").toLowerCase().includes(q);
+    });
+
+    const filteredConversations = (conversations || []).filter((c: any) => {
+        if (!query.trim()) return true;
+        const q = query.toLowerCase();
+        return ((c.groupName || c.name || "").toLowerCase().includes(q));
+    });
+
+    const findExisting1to1 = (userId: Id<"users">) => {
+        return (conversations || []).find((c: any) => !c.isGroup && c.participants.includes(me?._id) && c.participants.includes(userId));
+    };
+
+    const openOrCreate1to1 = async (user: any) => {
+        const existing = findExisting1to1(user._id as any);
+        if (existing) {
+            setSelectedConversation(existing);
+            router.push(`/chats/${existing._id}`);
+            dialogCloseRef.current?.click();
+            return;
+        }
+        try {
+            const id = await createConversation({ isGroup: false, participants: [me?._id!, user._id] });
+            setSelectedConversation({ _id: id, isGroup: false, participants: [me?._id!, user._id], name: user.name, image: user.image } as any);
+            router.push(`/chats/${id}`);
+            dialogCloseRef.current?.click();
+        } catch (err) {
+            toast.error("Failed to start chat");
+            console.error(err);
+        }
     };
 
     return (
@@ -114,15 +154,27 @@ const UserListDialog = () => {
             <DialogContent>
                 <DialogHeader>
                     <DialogClose ref={dialogCloseRef} />
-                    <DialogTitle>USERS</DialogTitle>
+                    <DialogTitle>Start a chat</DialogTitle>
                 </DialogHeader>
 
-                <DialogDescription className="flex flex-col">Start a new chat <span className="tracking-tight font-serif italic text-gray-500 text-[12px]"> Select multiple accounts to create a group</span></DialogDescription>
+                <DialogDescription className="flex flex-col">Search for people or conversations. Select multiple users to create a group.</DialogDescription>
+
+                {/* Group preview image */}
                 {renderedImage && (
                     <div className='w-16 h-16 relative mx-auto'>
-                        <Image src={renderedImage} fill alt='user image' className='rounded-full object-cover' />
+                        <Image src={renderedImage} fill alt='group image' className='rounded-full object-cover' />
                     </div>
                 )}
+
+                {/* Search */}
+                <Input
+                    placeholder='Search users or conversations'
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    className='my-2'
+                />
+
+                {/* Group config */}
                 <input
                     type='file'
                     accept='image/*'
@@ -131,9 +183,9 @@ const UserListDialog = () => {
                     onChange={(e) => setSelectedImage(e.target.files![0])}
                 />
                 {selectedUsers.length > 1 && (
-                    <>
+                    <div className='flex items-center gap-2 my-2'>
                         <Input
-                            placeholder='Group Name'
+                            placeholder='Group name'
                             value={groupName}
                             onChange={(e) => setGroupName(e.target.value)}
                         />
@@ -141,42 +193,82 @@ const UserListDialog = () => {
                             <ImageIcon size={20} />
                             Group Image
                         </Button>
-                    </>
+                    </div>
                 )}
-                <div className='flex flex-col gap-3 overflow-auto max-h-60'>
-                    {users?.map((user) => (
-                        <div
-                            key={user._id}
-                            className={`flex gap-3 items-center p-2 rounded cursor-pointer active:scale-95 
-                                transition-all ease-in-out duration-300
-                            ${selectedUsers.includes(user._id) ? "bg-accent rounded-sm" : ""}`}
-                            onClick={() => {
-                                if (selectedUsers.includes(user._id)) {
-                                    setSelectedUsers(selectedUsers.filter((id) => id !== user._id));
-                                } else {
-                                    setSelectedUsers([...selectedUsers, user._id]);
-                                }
-                            }}
-                        >
-                            <Avatar className='overflow-visible'>
-                                
-                                <AvatarImage src={user.image} className='rounded-full object-cover' />
-                                <AvatarFallback>
-                                    <div className='animate-pulse bg-gray-tertiary w-full h-full rounded-full'></div>
-                                </AvatarFallback>
-                            </Avatar>
 
-                            <div className='w-full '>
-                                <div className='flex items-center justify-between'>
-                                    <p className='text-md font-medium'>{user.name || user.email.split("@")[0]}</p>
-                                </div>
+                {/* Results list */}
+                <div className='flex flex-col gap-2 overflow-auto max-h-80'>
+                    {/* Conversations section */}
+                    {query && (
+                        <div>
+                            <p className='text-xs uppercase text-muted-foreground px-1 mb-1'>Conversations</p>
+                            <div className='rounded-md border divide-y'>
+                                {filteredConversations.length === 0 && (
+                                    <div className='px-3 py-2 text-sm text-muted-foreground'>No conversations</div>
+                                )}
+                                {filteredConversations.map((c: any) => (
+                                    <div key={c._id} className='flex items-center gap-3 px-3 py-2 hover:bg-accent cursor-pointer' onClick={() => { setSelectedConversation(c); router.push(`/chats/${c._id}`); dialogCloseRef.current?.click(); }}>
+                                        <Avatar>
+                                            <AvatarImage src={c.groupImage || c.image || "/placeholder.png"} />
+                                            <AvatarFallback>
+                                                <div className='animate-pulse bg-gray-tertiary w-full h-full rounded-full'></div>
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <div className='min-w-0'>
+                                            <p className='text-sm font-medium truncate'>{c.groupName || c.name || 'Conversation'}</p>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
-                    ))}
+                    )}
+
+                    {/* Users section */}
+                    <div>
+                        <p className='text-xs uppercase text-muted-foreground px-1 mb-1'>Users</p>
+                        <div className='rounded-md border divide-y'>
+                            {filteredUsers.length === 0 && (
+                                <div className='px-3 py-2 text-sm text-muted-foreground'>No users</div>
+                            )}
+                            {filteredUsers.map((user) => (
+                                <div
+                                    key={user._id}
+                                    className={`flex items-center gap-3 px-3 py-2 hover:bg-accent cursor-pointer ${selectedUsers.includes(user._id) ? 'bg-accent' : ''}`}
+                                    onClick={() => {
+                                        if (query.trim()) {
+                                            openOrCreate1to1(user);
+                                        } else {
+                                            if (selectedUsers.includes(user._id)) {
+                                                setSelectedUsers(selectedUsers.filter((id) => id !== user._id));
+                                            } else {
+                                                setSelectedUsers([...selectedUsers, user._id]);
+                                            }
+                                        }
+                                    }}
+                                >
+                                    <Avatar>
+                                        <AvatarImage src={user.image} />
+                                        <AvatarFallback>
+                                            <div className='animate-pulse bg-gray-tertiary w-full h-full rounded-full'></div>
+                                        </AvatarFallback>
+                                    </Avatar>
+                                    <div className='min-w-0 flex-1'>
+                                        <p className='text-sm font-medium truncate'>{user.name || user.email.split('@')[0]}</p>
+                                        <p className='text-xs text-muted-foreground truncate'>{user.email}</p>
+                                    </div>
+                                    {query.trim() && (
+                                        <Button size='sm' className='ml-auto'>Chat</Button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 </div>
-                <div className='flex justify-between'>
+
+                {/* Footer actions */}
+                <div className='flex justify-between mt-3'>
                     <DialogClose asChild>
-                        <Button variant={"outline"}>Cancel</Button>
+                        <Button variant={'outline'}>Close</Button>
                     </DialogClose>
                     <Button
                         onClick={handleCreateConversation}
@@ -185,7 +277,7 @@ const UserListDialog = () => {
                         {isLoading ? (
                             <div className='w-5 h-5 border-t-2 border-b-2  rounded-full animate-spin' />
                         ) : (
-                            "Create"
+                            selectedUsers.length > 1 ? 'Create group' : 'Create'
                         )}
                     </Button>
                 </div>

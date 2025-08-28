@@ -40,6 +40,33 @@ const MediaDropdown = () => {
 
   const [isLoading, setIsLoading] = useState(false);
 
+  // Paste handler: capture image/video from clipboard and open preview
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind === "file") {
+          const file = item.getAsFile();
+          if (!file) continue;
+          if (file.type.startsWith("image/")) {
+            setSelectedImage(file);
+            e.preventDefault();
+            break;
+          }
+          if (file.type.startsWith("video/")) {
+            setSelectedVideo(file);
+            e.preventDefault();
+            break;
+          }
+        }
+      }
+    };
+    window.addEventListener("paste", onPaste as any);
+    return () => window.removeEventListener("paste", onPaste as any);
+  }, []);
+
   const generateUploadUrl = useMutation(api.conversations.generateUploadUrl);
   const sendImage = useMutation(api.messages.sendImage);
   const sendVideo = useMutation(api.messages.sendVideo);
@@ -48,7 +75,7 @@ const MediaDropdown = () => {
   const { selectedConversation } = useConversationStore();
 
   const Plus = (props: React.SVGProps<SVGSVGElement>) => (
-    <div>
+    <div className="mb-[6px]">
       <svg
         xmlns="http://www.w3.org/2000/svg"
         fill="none"

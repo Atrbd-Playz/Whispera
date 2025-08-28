@@ -42,6 +42,8 @@ export const sendTextMessage = mutation({
 			content: args.content,
 			conversation: args.conversation,
 			messageType: "text",
+			deliveredTo: [],
+			seenBy: [],
 		});
 	},
 });
@@ -112,6 +114,8 @@ export const sendImage = mutation({
 			sender: args.sender,
 			messageType: "image",
 			conversation: args.conversation,
+			deliveredTo: [],
+			seenBy: [],
 		});
 	},
 });
@@ -135,6 +139,80 @@ export const sendVideo = mutation({
 			sender: args.sender,
 			messageType: "video",
 			conversation: args.conversation,
+			deliveredTo: [],
+			seenBy: [],
 		});
 	},
+});
+
+// Mark messages in a conversation as delivered for the current user
+export const markDeliveredForConversation = mutation({
+  args: { conversation: v.id("conversations") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new ConvexError("Unauthorized");
+
+    const me = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier)
+      )
+      .unique();
+
+    if (!me) throw new ConvexError("User not found");
+
+    const messages = await ctx.db
+      .query("messages")
+      .withIndex("by_conversation", (q) => q.eq("conversation", args.conversation))
+      .order("desc")
+      .take(500);
+
+    for (const m of messages) {
+      if (m.sender === me._id) continue; // don't mark own messages
+      const delivered = new Set((m.deliveredTo || []).map((x) => x));
+      if (!delivered.has(me._id)) {
+        delivered.add(me._id);
+        await ctx.db.patch(m._id, { deliveredTo: Array.from(delivered) });
+      }
+    }
+  },
+});
+
+// Mark messages in a conversation as seen for the current user
+export const markSeenForConversation = mutation({
+  args: { conversation: v.id("conversations") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new ConvexError("Unauthorized");
+
+    const me = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier)
+      )
+      .unique();
+
+    if (!me) throw new ConvexError("User not found");
+
+    const messages = await ctx.db
+      .query("messages")
+      .withIndex("by_conversation", (q) => q.eq("conversation", args.conversation))
+      .order("desc")
+      .take(500);
+
+    for (const m of messages) {
+      if (m.sender === me._id) continue; // don't mark own messages
+      const seen = new Set((m.seenBy || []).map((x) => x));
+      if (!seen.has(me._id)) {
+        seen.add(me._id);
+        // ensure delivered as well
+        const delivered = new Set((m.deliveredTo || []).map((x) => x));
+        delivered.add(me._id);
+        await ctx.db.patch(m._id, {
+          seenBy: Array.from(seen),
+          deliveredTo: Array.from(delivered),
+        });
+      }
+    }
+  },
 });

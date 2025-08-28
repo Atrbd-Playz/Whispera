@@ -7,3 +7,13 @@ export const MessageSeenSvg = (props: React.SVGProps<SVGSVGElement>) => (
 		/>
 	</svg>
 );
+
+export const MessageSentSvg = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg width={16} height={11} viewBox="0 0 16 11" fill="none" {...props}>
+    <title>{"msg-check"}</title>
+    <path
+      fill="currentColor"
+      d="M5.5 10.2a.7.7 0 0 1-.5-.2L1.2 6.2a.7.7 0 0 1 1-1l3.2 3.2L13.9 0l1 1-9 9a.7.7 0 0 1-.5.2z"
+    />
+  </svg>
+);

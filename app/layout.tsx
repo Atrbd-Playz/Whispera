@@ -6,8 +6,11 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import ConvexClientProvider from '../providers/ConvexClientProvider'
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "react-hot-toast";
+import dynamic from "next/dynamic";
 
 const inter = Inter({ subsets: ["latin"] });
+
+const PushInit = dynamic(() => import("@/components/notifications/PushInit"), { ssr: false });
 
 export const metadata: Metadata = {
   title: "Whispera",
@@ -36,7 +39,7 @@ export default function RootLayout({
 
               {children}
 
-
+              <PushInit />
 
               <Toaster/>
             </TooltipProvider>

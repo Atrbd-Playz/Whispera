@@ -70,7 +70,7 @@ export const getMyConversations = query({
 
 		const conversationsWithDetails = await Promise.all(
 			myConversations.map(async (conversation) => {
-				let userDetails = {};
+				let userDetails: any = {};
 
 				if (!conversation.isGroup) {
 					const otherUserId = conversation.participants.find((id) => id !== user._id);
@@ -79,7 +79,17 @@ export const getMyConversations = query({
 						.filter((q) => q.eq(q.field("_id"), otherUserId))
 						.take(1);
 
-					userDetails = userProfile[0];
+					const other = userProfile[0];
+					if (other) {
+						userDetails = other;
+					} else {
+						// Other user was deleted; provide fallbacks for UI
+						userDetails = {
+							name: "Deleted user",
+							image: "/placeholder.png",
+							isOnline: false,
+						};
+					}
 				}
 
 				const lastMessage = await ctx.db
@@ -125,4 +135,50 @@ export const kickUser = mutation({
 
 export const generateUploadUrl = mutation(async (ctx) => {
 	return await ctx.storage.generateUploadUrl();
+});
+
+export const deleteConversation = mutation({
+  args: {
+    conversationId: v.id("conversations"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new ConvexError("Unauthorized");
+
+    const me = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .unique();
+
+    if (!me) throw new ConvexError("User not found");
+
+    const conversation = await ctx.db.get(args.conversationId);
+    if (!conversation) throw new ConvexError("Conversation not found");
+
+    if (!conversation.participants.includes(me._id)) {
+      throw new ConvexError("You are not a participant of this conversation");
+    }
+
+    // Optional: only admin can delete a group conversation
+    if (conversation.isGroup && conversation.admin && conversation.admin !== me._id) {
+      throw new ConvexError("Only the group admin can delete this conversation");
+    }
+
+    // Delete all messages in batches
+    while (true) {
+      const batch = await ctx.db
+        .query("messages")
+        .withIndex("by_conversation", (q) => q.eq("conversation", args.conversationId))
+        .take(100);
+      if (batch.length === 0) break;
+      for (const m of batch) {
+        await ctx.db.delete(m._id);
+      }
+    }
+
+    // Delete the conversation itself
+    await ctx.db.delete(args.conversationId);
+
+    return { deleted: true };
+  },
 });

@@ -19,20 +19,40 @@ export const createUser = internalMutation({
     },
 });
 
-export const deleteUser = mutation(
-  async (ctx, { tokenIdentifier }: { tokenIdentifier: string }) => {
+export const deleteUser = internalMutation({
+  args: { tokenIdentifier: v.string() },
+  handler: async (ctx, args) => {
     const user = await ctx.db
       .query("users")
       .withIndex("by_tokenIdentifier", (q) =>
-        q.eq("tokenIdentifier", tokenIdentifier)
+        q.eq("tokenIdentifier", args.tokenIdentifier)
       )
       .unique();
 
-    if (user) {
-      await ctx.db.delete(user._id);
+    if (!user) return;
+
+    // Update conversations that include this user
+    const conversations = await ctx.db.query("conversations").collect();
+
+    for (const c of conversations) {
+      if (!c.participants.includes(user._id)) continue;
+
+      if (c.isGroup) {
+        const remaining = c.participants.filter((id) => id !== user._id);
+        const newAdmin = c.admin && c.admin === user._id ? remaining[0] : c.admin;
+        await ctx.db.patch(c._id, {
+          participants: remaining,
+          admin: newAdmin,
+        });
+      } else {
+        // 1:1 chat: nothing to patch; UI will fallback when other user is missing
+      }
     }
-  }
-);
+
+    // Finally delete the user document
+    await ctx.db.delete(user._id);
+  },
+});
 
 export const updateUser = internalMutation({
     args: {
@@ -115,8 +135,9 @@ export const getUserById = query({
             .filter((q) => q.eq(q.field("_id"), args.id))
             .first();
 
+        // Return null instead of throwing to allow clients to handle deleted users gracefully
         if (!user) {
-            throw new ConvexError("User not found");
+            return null as any;
         }
 
         return user;
