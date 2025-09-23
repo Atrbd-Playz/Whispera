@@ -33,22 +33,44 @@ self.addEventListener('notificationclick', (event) => {
 
 // Handle push events to show notifications even when the site is closed
 self.addEventListener('push', (event) => {
-  const getPayload = () => {
+  // Properly await and parse payload text (payload may be JSON or simple text)
+  const handle = async () => {
     try {
-      if (!event.data) return {};
-      const text = event.data.text();
-      try { return JSON.parse(text); } catch { return { body: text }; }
-    } catch (_) {
-      return {};
+      if (!event.data) {
+        // No payload, show a generic notification
+        return self.registration.showNotification('New message', { body: '' });
+      }
+
+      let text = '';
+      try {
+        text = await event.data.text();
+      } catch (e) {
+        // Fallback: try to treat data as already a string-like object
+        try { text = String(event.data); } catch { text = ''; }
+      }
+
+      let payload = {};
+      try {
+        payload = JSON.parse(text || '{}');
+      } catch (_) {
+        // Not JSON, treat whole text as body
+        payload = { body: text };
+      }
+
+      const title = payload.title || 'New message';
+      const options = (payload.options && typeof payload.options === 'object') ? payload.options : {
+        body: payload.body || '',
+        icon: payload.icon || '/favicon.ico',
+        badge: payload.badge || '/favicon.ico',
+        data: { url: payload.url || '/chats' },
+      };
+
+      await self.registration.showNotification(title, options);
+    } catch (err) {
+      // Ensure the event stays alive long enough for errors to be visible in SW logs
+      console.error('[sw] push handler error', err);
     }
   };
-  const payload = getPayload();
-  const title = payload.title || 'New message';
-  const options = payload.options || {
-    body: payload.body || '',
-    icon: payload.icon || '/favicon.ico',
-    badge: payload.badge || '/favicon.ico',
-    data: { url: payload.url || '/chats' },
-  };
-  event.waitUntil(self.registration.showNotification(title, options));
+
+  event.waitUntil(handle());
 });
