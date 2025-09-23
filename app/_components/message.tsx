@@ -42,6 +42,15 @@ const Message = ({ me, message, previousMessage }: ChatBubbleProps) => {
 
   const [openImage, setOpenImage] = useState(false);
   const [openVideo, setOpenVideo] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [showTrigger, setShowTrigger] = useState(false);
+  const [translateX, setTranslateX] = useState(0);
+  const draggingRef = useRef(false);
+
+  // Long-press handling for mobile
+  const touchTimerRef = useRef<number | null>(null);
+  const touchStartX = useRef<number | null>(null);
+  const lastTouchX = useRef<number | null>(null);
 
   // Convex mutation to mark messages as delivered for the selected conversation
   const markDelivered = useMutation(api.messages.markDeliveredForConversation);
@@ -133,7 +142,7 @@ const Message = ({ me, message, previousMessage }: ChatBubbleProps) => {
   const renderMessageContent = () => {
     switch (message.messageType) {
       case "text":
-        return <TextMessage message={message} />;
+        return <TextMessage message={message} replyTo={message.replyTo} />;
       case "image":
         return (
           <ImageMessage
@@ -180,8 +189,65 @@ const Message = ({ me, message, previousMessage }: ChatBubbleProps) => {
         <div
           className={`flex flex-col z-20 max-w-fit ${message.messageType === "text" ? "px-2 pt-1" : ""
             } rounded-md shadow-md relative ${bgClass}`}
+          style={{ transform: `translateX(${translateX}px)`, transition: draggingRef.current ? "none" : "transform 120ms ease-out" }}
+          onMouseEnter={() => setShowTrigger(true)}
+          onMouseLeave={() => setShowTrigger(false)}
+          onTouchStart={(e) => {
+            // start long-press timer
+            if (touchTimerRef.current) window.clearTimeout(touchTimerRef.current);
+            touchStartX.current = e.touches?.[0]?.clientX ?? null;
+            lastTouchX.current = touchStartX.current;
+            draggingRef.current = false;
+            touchTimerRef.current = window.setTimeout(() => {
+              setActionsOpen(true);
+            }, 500); // 500ms long-press
+          }}
+          onTouchMove={(e) => {
+            const x = e.touches?.[0]?.clientX ?? null;
+            if (x === null || touchStartX.current === null) return;
+            const dx = x - touchStartX.current;
+            // If user moves finger more than 6px, cancel long-press
+            if (Math.abs(dx) > 6 && touchTimerRef.current) {
+              window.clearTimeout(touchTimerRef.current);
+              touchTimerRef.current = null;
+            }
+            // For own messages require left-swipe to reply; otherwise require right-swipe
+            const shouldHandleRight = !fromMe;
+            if ((shouldHandleRight && dx > 0) || (!shouldHandleRight && dx < 0)) {
+              draggingRef.current = true;
+              // cap at 120px for visual (use absolute value for left-swipe)
+              const capped = Math.min(Math.abs(dx), 120);
+              setTranslateX(shouldHandleRight ? capped : -capped);
+            }
+            lastTouchX.current = x;
+          }}
+          onTouchEnd={(e) => {
+            if (touchTimerRef.current) {
+              window.clearTimeout(touchTimerRef.current);
+              touchTimerRef.current = null;
+            }
+            const endX = lastTouchX.current ?? e.changedTouches?.[0]?.clientX ?? null;
+            if (touchStartX.current !== null && endX !== null) {
+              const dx = endX - touchStartX.current;
+              const shouldHandleRight = !fromMe;
+              if ((shouldHandleRight && dx > 80) || (!shouldHandleRight && dx < -80)) {
+                // swipe -> set reply (direction depends on sender)
+                const { setReplyToMessage } = useConversationStore.getState();
+                setReplyToMessage({ id: (message as any)._id as any, content: message.content });
+              }
+            }
+            // reset visual translate with a small delay for UX
+            setTimeout(() => setTranslateX(0), 150);
+            draggingRef.current = false;
+            touchStartX.current = null;
+            lastTouchX.current = null;
+          }}
+          onContextMenu={(e: React.MouseEvent<HTMLDivElement>) => {
+            e.preventDefault();
+            setActionsOpen(true);
+          }}
         >
-          <ChatAvatarActions message={message} me={me} />
+          <ChatAvatarActions message={message} me={me} open={actionsOpen} onOpenChange={setActionsOpen} showTrigger={showTrigger} />
           {renderMessageContent()}
 
           {/* dialogs */}
@@ -335,7 +401,7 @@ const MessageTime = ({ time, fromMe, delivered, seen }: { time: string; fromMe: 
   );
 };
 
-const TextMessage = ({ message }: { message: IMessage }) => {
+const TextMessage = ({ message, replyTo }: { message: IMessage; replyTo?: any }) => {
   const [expanded, setExpanded] = useState(false);
 
   // Regex patterns
@@ -354,6 +420,13 @@ const TextMessage = ({ message }: { message: IMessage }) => {
 
   return (
     <div className="w-full">
+      {/* Quoted reply preview */}
+      {replyTo && (
+        <div className="border-l-2 border-gray-300 dark:border-zinc-600 pl-2 mb-1 text-xs text-gray-600 dark:text-gray-300">
+          <div className="font-medium text-[12px]">{replyTo.sender?.name || 'Unknown'}</div>
+          <div className="truncate">{replyTo.content}</div>
+        </div>
+      )}
       <p
         className={`mr-2 text-sm font-light whitespace-pre-wrap break-words break-all ${
           !expanded && isLong ? "line-clamp-5" : ""

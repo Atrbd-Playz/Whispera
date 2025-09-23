@@ -1,36 +1,113 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Whispera
 
-## Getting Started
+Whispera is a modern chat UI built with Next.js, React and Convex. The app focuses on a polished, fast messaging experience with smooth animations (framer-motion), lightweight in-app notifications and a small set of reusable UI components.
 
-First, run the development server:
+This repository contains the Whispera client and a small set of Convex-backed server functions — everything you need to run the app locally and deploy to Vercel or another Node hosting provider.
 
-```bash
-npm run dev
+Highlights
+
+- Fast, reactive chat UI using Convex for backend data.
+- Smooth animations via `framer-motion`.
+- Lightweight in-app notifications with optional browser Notification API (no background push by default).
+- Small, reusable UI primitives (buttons, spinner, dialogs).
+
+Important: Background web push (service workers + VAPID) has been intentionally removed from the default codebase. Whispera still supports in-app notifications and the browser Notification API while the app is running. If you need background push (notifications when the browser is closed), we can add a new, tested push implementation separately.
+
+Table of contents
+
+- Getting started
+- Scripts
+- Local development
+- Production build & deploy
+- Project layout
+- Notifications
+- Troubleshooting & tips
+- Contributing
+
+Getting started
+
+1. Install dependencies
+
+```powershell
+npm install
 # or
-yarn dev
+pnpm install
 # or
-pnpm dev
-# or
-bun dev
+yarn
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Run the dev server
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```powershell
+npm run dev
+# Open http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
+Scripts
 
-## Learn More
+- `npm run dev` — Run Next.js in development mode
+- `npm run build` — Create an optimized production build
+- `npm run start` — Run the production build locally (after `npm run build`)
 
-To learn more about Next.js, take a look at the following resources:
+Local development notes
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- The chat UI uses Convex for real-time sync. Ensure Convex is configured and the `convex/` files are present (they live under `convex/` and a generated client is used in `convex/_generated/api`).
+- The app is an opinionated Next.js app (app router). Pages and UI components live under `app/` and `components/`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
+Project layout (short)
 
-## Deploy on Vercel
+- `app/` — Next.js app routes and top-level layouts
+- `components/` — Reusable UI primitives and feature components (chat panel, header, footer)
+- `components/ui/` — Small UI building blocks (Spinner, button, input)
+- `convex/` — Convex functions & schema / generated API
+- `public/` — Static assets
+- `README.md` — This file
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Notifications
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+- The project intentionally does not register a service worker by default. Background push (when browser is closed) was removed because it requires careful VAPID management, secure hosting (HTTPS), and subscription lifecycle maintenance.
+- In-app notifications are implemented using `react-hot-toast`, a small audio chime and the browser Notification API (when the user grants permission). This provides a reliable UX while the app is running.
+- If you want background push later, I can add a dedicated, documented implementation that:
+	- Adds a tested `public/sw.js` service worker
+	- Implements VAPID key management and server-side sending (web-push)
+	- Exposes an admin UI to view and manage subscriptions
+
+Production & deployment
+
+1. Build the app
+
+```powershell
+npm run build
+```
+
+2. Run production
+
+```powershell
+npm run start
+```
+
+Deploy to Vercel
+
+1. Connect this repo to Vercel and set any environment variables you need.
+2. Push to the default branch (e.g. `main`) and Vercel will build and deploy automatically.
+
+Troubleshooting & tips
+
+- If the app fails to start, run `npm run build` locally and inspect TypeScript/ESLint output.
+- If message syncing doesn't work, ensure Convex is configured correctly and your Convex client keys are accessible to the running process.
+- For Notification permission issues: open DevTools → Application → Notifications (or check browser-specific notification settings). The app will prompt the user for permission using the small UI control in the header.
+
+Contributing
+
+Contributions, issues and feature requests are welcome. If you'd like to help:
+
+1. Fork the repository
+2. Create a feature branch
+3. Open a PR with a clear description of your changes
+
+If you want me to reintroduce background push (service worker + VAPID) with a secure workflow and admin UI, say the word and I will add a separate, well-tested implementation and document the required env vars.
+
+License
+
+This project is provided as-is. Add your project license here.
+

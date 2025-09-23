@@ -2,26 +2,40 @@
 
 import { IMessage, useConversationStore } from "@/store/chat-store";
 import { useMutation } from "convex/react";
-import { Ban, LogOut, MessageSquare } from "lucide-react";
+import { api } from "@/convex/_generated/api";
+import { Ban, LogOut, MessageSquare, MoreHorizontal, CornerUpLeft } from "lucide-react";
 import toast from "react-hot-toast";
 import React, { useState } from "react";
-import { api } from "@/convex/_generated/api";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 
 type ChatAvatarActionsProps = {
   message: IMessage;
   me: any;
+  // Controlled open state (optional)
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  // Whether to render the three-dot trigger (Message will control visibility via CSS)
+  showTrigger?: boolean;
 };
 
-const ChatAvatarActions = ({ me, message }: ChatAvatarActionsProps) => {
-  const { selectedConversation, setSelectedConversation } = useConversationStore();
+const ChatAvatarActions = ({ me, message, open: openProp, onOpenChange, showTrigger = true }: ChatAvatarActionsProps) => {
+  const { selectedConversation, setSelectedConversation, setReplyToMessage } = useConversationStore();
+  const unsend = useMutation(api.messages.unsendMessage);
+
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = typeof openProp === "boolean" && typeof onOpenChange === "function";
+  const open = isControlled ? (openProp as boolean) : internalOpen;
+  const setOpen = (v: boolean) => {
+    if (isControlled && onOpenChange) onOpenChange(v);
+    else setInternalOpen(v);
+  };
 
   const sender = (message as any)?.sender;
   const senderId = sender?._id ?? null;
@@ -39,7 +53,6 @@ const ChatAvatarActions = ({ me, message }: ChatAvatarActionsProps) => {
   const kickUser = useMutation(api.conversations.kickUser);
   const createConversation = useMutation(api.conversations.createConversation);
 
-  const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleKickUser = async () => {
@@ -100,6 +113,58 @@ const ChatAvatarActions = ({ me, message }: ChatAvatarActionsProps) => {
 
   return (
     <>
+      {/* DropdownMenu always rendered so it can be opened programmatically (contextmenu / long-press) */}
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger asChild>
+          {/*
+            Trigger is always present (for anchoring) but we control visibility:
+            - hidden on small screens (mobile)
+            - when `showTrigger` is true we make it interactive/visible
+            - otherwise keep it invisible but present so contextmenu/open works
+            Position: vertically centered, slightly outside bubble (-right-8 for incoming, -left-8 for outgoing)
+          */}
+          <button
+            type="button"
+            aria-label="Message actions"
+            className={`hidden sm:flex items-center justify-center p-1 rounded-full hover:bg-gray-100 dark:hover:bg-zinc-700 absolute top-1/2 -translate-y-1/2 z-30 ${fromMe ? "-left-8" : "-right-8"} opacity-0 pointer-events-none sm:group-hover:opacity-100 sm:group-hover:pointer-events-auto transition-opacity duration-150`}
+          >
+            <MoreHorizontal className="w-4 h-4" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent sideOffset={6} className="w-44">
+            <DropdownMenuItem
+              onClick={() => {
+                setReplyToMessage({ id: (message as any)._id as any, content: message.content });
+                setOpen(false);
+              }}
+              className="flex items-center gap-2"
+            >
+              <CornerUpLeft className="w-4 h-4" />
+              Reply
+            </DropdownMenuItem>
+
+            {fromMe && (
+              <DropdownMenuItem
+                onClick={async () => {
+                  try {
+                    setLoading(true);
+                    await unsend({ messageId: (message as any)._id });
+                    toast.success("Message unsent");
+                    setOpen(false);
+                  } catch (e) {
+                    toast.error("Failed to unsend message");
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                className="flex items-center gap-2 text-destructive"
+              >
+                Unsend
+              </DropdownMenuItem>
+            )}
+
+          </DropdownMenuContent>
+        </DropdownMenu>
       {/* ✅ Only render sender name in group chats if it's NOT me */}
       {isGroup && !fromMe && (
         <div
@@ -114,52 +179,7 @@ const ChatAvatarActions = ({ me, message }: ChatAvatarActionsProps) => {
         </div>
       )}
 
-      {/* Dialog */}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <img
-                src={senderImage || "/placeholder.png"}
-                alt={senderName}
-                className="w-10 h-10 rounded-full object-cover"
-              />
-              <span>{senderName}</span>
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="py-4 text-sm text-muted-foreground">
-            {fromAI ? "This is an AI assistant." : `User ID: ${senderId}`}
-          </div>
-
-          <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            {/* Everyone sees Message */}
-            {!fromAI && (
-              <Button
-                onClick={handleCreateConversation}
-                disabled={loading}
-                className="flex items-center gap-2"
-              >
-                <MessageSquare size={16} />
-                Message
-              </Button>
-            )}
-
-            {/* Only admin sees Kick */}
-            {isAdmin && isGroup && senderId !== selectedConversation?.admin && (
-              <Button
-                variant="destructive"
-                onClick={handleKickUser}
-                disabled={loading}
-                className="flex items-center gap-2"
-              >
-                <LogOut size={16} />
-                Kick from Group
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* dropdown handled above when showTrigger is true */}
     </>
   );
 };

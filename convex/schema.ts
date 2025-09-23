@@ -23,6 +23,7 @@ export default defineSchema({
 		sender: v.string(), // should be string so that it doesn't throw errors in openai part ("ChatGPT")
 		content: v.string(),
 		messageType: v.union(v.literal("text"), v.literal("image"), v.literal("video")),
+		replyTo: v.optional(v.id("messages")),
 		deliveredTo: v.optional(v.array(v.id("users"))),
 		seenBy: v.optional(v.array(v.id("users"))),
 	}).index("by_conversation", ["conversation"]),

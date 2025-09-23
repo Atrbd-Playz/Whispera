@@ -1,3 +1,5 @@
+"use client";
+
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from 'convex/react';
@@ -6,27 +8,25 @@ import { api } from '@/convex/_generated/api';
 import Conversation from './conversation';
 import { useConversationStore } from '@/store/chat-store';
 import { Conversation as ConversationType } from '@/store/chat-store';
-import { motion, AnimatePresence } from 'framer-motion'; // Add this import
+import { motion, AnimatePresence } from 'framer-motion';
+import Spinner from '@/components/ui/Spinner';
 
-type Props = {}
+type Props = {};
 
-const ChatPanel = (props: Props) => {
+export default function ChatPanel(_props: Props) {
     const router = useRouter();
     const conversations = useQuery(api.conversations.getMyConversations);
     const me = useQuery(api.users.getMe);
-    const { selectedConversation } = useConversationStore();
+    const selectedConversation = useConversationStore((s) => s.selectedConversation);
     const setSelectedConversation = useConversationStore((state) => state.setSelectedConversation);
 
-    // Sort conversations by updatedAt (or createdAt) descending
     const sortedConversations = React.useMemo(() => {
-        if (!conversations) return [];
-        return [...conversations].sort(
-            (a, b) => {
-                const bTime = b.lastMessage?._creationTime ?? b._creationTime;
-                const aTime = a.lastMessage?._creationTime ?? a._creationTime;
-                return bTime - aTime;
-            }
-        );
+        if (!conversations) return [] as ConversationType[];
+        return [...conversations].sort((a, b) => {
+            const bTime = b.lastMessage?._creationTime ?? b._creationTime;
+            const aTime = a.lastMessage?._creationTime ?? a._creationTime;
+            return bTime - aTime;
+        });
     }, [conversations]);
 
     const handleConversationClick = (conversation: ConversationType) => {
@@ -34,17 +34,14 @@ const ChatPanel = (props: Props) => {
         router.push(`/chats/${conversation._id}`);
     };
 
-    // Notification helpers
     const prevLastMapRef = React.useRef<Record<string, string | undefined>>({});
 
     const playNotify = () => {
         try {
             const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
             const ctx = new AudioCtx();
-
-            // Master gain for overall soft volume
             const master = ctx.createGain();
-            master.gain.value = 0.08; // gentle volume
+            master.gain.value = 0.08;
             master.connect(ctx.destination);
 
             const tone = (freq: number, start: number, dur: number) => {
@@ -60,76 +57,25 @@ const ChatPanel = (props: Props) => {
                 o.stop(ctx.currentTime + start + dur + 0.05);
             };
 
-            // Soothing two-tone chime
-            tone(660, 0.0, 0.45); // E5
-            tone(880, 0.15, 0.6);  // A5
-        } catch {}
-    };
-
-    const [swReady, setSwReady] = React.useState(false);
-    const subscribePush = React.useCallback(async () => {
-        if (typeof window === 'undefined') return;
-        if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-        try {
-            const reg = await navigator.serviceWorker.getRegistration();
-            if (!reg) return;
-            const existing = await reg.pushManager.getSubscription();
-            if (existing) {
-                // ensure it's saved on server
-                await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(existing) });
-                return;
-            }
-            if (Notification.permission !== 'granted') {
-                const perm = await Notification.requestPermission();
-                if (perm !== 'granted') return;
-            }
-            const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY as string | undefined;
-            if (!publicKey) return;
-            const urlBase64ToUint8Array = (base64String: string) => {
-                const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-                const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-                const rawData = window.atob(base64);
-                const outputArray = new Uint8Array(rawData.length);
-                for (let i = 0; i < rawData.length; ++i) {
-                    outputArray[i] = rawData.charCodeAt(i);
-                }
-                return outputArray;
-            };
-            const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) });
-            await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(sub) });
+            tone(660, 0.0, 0.45);
+            tone(880, 0.15, 0.6);
         } catch (e) {
-            // ignore
+            console.warn('[ChatPanel] playNotify failed', e);
         }
-    }, []);
-
-    React.useEffect(() => {
-        if (typeof window === 'undefined') return;
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js').then(() => {
-                setSwReady(true);
-                subscribePush();
-            }).catch(() => {});
-        }
-        if ('Notification' in window && Notification.permission === 'default') {
-            Notification.requestPermission().catch(() => {});
-        }
-    }, [subscribePush]);
+    };
 
     const notifyBrowser = async (title: string, body: string, icon?: string, url?: string) => {
         if (typeof window === 'undefined' || !('Notification' in window)) return;
         const opts: NotificationOptions = { body, icon, data: { url } } as any;
-        // Prefer service worker so the notification appears in system tray and works while unfocused
-        try {
-            const reg = await navigator.serviceWorker.getRegistration();
-            if (reg) {
-                reg.showNotification(title, opts);
-                return;
-            }
-        } catch {}
-        // Fallback
         if (Notification.permission === 'granted') {
-            new Notification(title, opts);
+            try {
+                new Notification(title, opts);
+                return;
+            } catch (e) {
+                console.warn('[ChatPanel] Notification API failed', e);
+            }
         }
+        toast(title + ': ' + body);
     };
 
     const showToast = (conv: any) => {
@@ -176,10 +122,8 @@ const ChatPanel = (props: Props) => {
                 );
                 showToast(conv);
             }
-            // update map
             prev[conv._id] = last._id;
         }
-        // Initialize for first load
         if (Object.keys(prev).length === 0) {
             for (const conv of conversations) {
                 if (conv.lastMessage) prev[conv._id] = conv.lastMessage._id;
@@ -188,36 +132,36 @@ const ChatPanel = (props: Props) => {
     }, [conversations, me?._id, selectedConversation?._id]);
 
     return (
-        <>
-            <div className='my-3 flex flex-col h-screen gap-0 overflow-auto w-full'>
+        <div className='my-3 flex flex-col h-screen gap-0 overflow-auto w-full'>
+            {!conversations ? (
+                <div className="flex items-center justify-center h-full">
+                    <Spinner size={48} />
+                </div>
+            ) : (
                 <AnimatePresence>
                     {sortedConversations.map((conversation: ConversationType) => (
                         <motion.div
                             key={conversation._id}
-                            layout // This enables smooth reordering animation
-                            initial={{ opacity: 0, y: 20 }}
+                            layout
+                            initial={{ opacity: 0, y: 12 }}
                             animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -20 }}
-                            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                            exit={{ opacity: 0, y: -8 }}
+                            transition={{ type: 'spring', stiffness: 260, damping: 28 }}
                             onClick={() => handleConversationClick(conversation)}
                             className="cursor-pointer"
                         >
                             <Conversation conversation={conversation} />
                         </motion.div>
                     ))}
-                </AnimatePresence>
 
-                {sortedConversations.length === 0 && (
-                    <>
-                        <p className='text-center text-gray-500 text-sm mt-3'>No conversations yet</p>
-                        <p className='text-center text-gray-500 text-sm mt-3'>
-                            Your chat list is as quiet as an introvert at a party. 😶
-                        </p>
-                    </>
-                )}
-            </div>
-        </>
+                    {sortedConversations.length === 0 && (
+                        <div className='py-8 text-center'>
+                            <p className='text-gray-500 text-sm'>No conversations yet</p>
+                            <p className='text-gray-500 text-sm mt-2'>Your chat list is as quiet as an introvert at a party. 😶</p>
+                        </div>
+                    )}
+                </AnimatePresence>
+            )}
+        </div>
     );
 }
-
-export default ChatPanel;

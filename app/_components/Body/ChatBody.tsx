@@ -1,15 +1,18 @@
+"use client";
+
 import { useRef, useEffect } from 'react';
 import ChatBubble from '../message';
 import { useQuery, useMutation } from 'convex/react';
 import { useConversationStore } from '@/store/chat-store';
 import { api } from '@/convex/_generated/api';
 import Message from '../message';
+import Spinner from '@/components/ui/Spinner';
 
 
 type Props = {}
 const ChatBody = (props: Props) => {
   const { selectedConversation } = useConversationStore();
-  const messages = useQuery(api.messages.getMessages, { conversation: selectedConversation!._id, });
+  const messages = useQuery(api.messages.getMessages, { conversation: selectedConversation!._id });
   const me = useQuery(api.users.getMe);
   const lastMessageRef = useRef<HTMLDivElement>(null);
 
@@ -25,10 +28,18 @@ const ChatBody = (props: Props) => {
 
   return (
     <div className='w-full no-scrollbar overflow-y-scroll flex-1 flex-col-reverse flex gap-2 p-2'>
-      {messages?.map((msg, idx) => (
-        <div key={msg._id} ref={lastMessageRef}>
-          <Message message={msg} me={me} previousMessage={idx < messages.length - 1 ? messages[idx + 1] : undefined} />
-        </div>))}
-    </div>)
+      {!messages ? (
+        <div className='w-full flex items-center justify-center py-6'>
+          <Spinner size={18} />
+        </div>
+      ) : (
+        messages.map((msg, idx) => (
+          <div key={msg._id} ref={lastMessageRef}>
+            <Message message={msg} me={me} previousMessage={idx < messages.length - 1 ? messages[idx + 1] : undefined} />
+          </div>
+        ))
+      )}
+    </div>
+  );
 }
 export default ChatBody

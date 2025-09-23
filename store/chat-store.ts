@@ -23,11 +23,16 @@ export type Conversation = {
 type ConversationStore = {
 	selectedConversation: Conversation | null;
 	setSelectedConversation: (conversation: Conversation | null) => void;
+	// Reply state: when user chooses to reply to a message
+	replyToMessage: { id: Id<"messages">; content: string } | null;
+	setReplyToMessage: (m: { id: Id<"messages">; content: string } | null) => void;
 };
 
 export const useConversationStore = create<ConversationStore>((set) => ({
 	selectedConversation: null,
 	setSelectedConversation: (conversation) => set({ selectedConversation: conversation }),
+	replyToMessage: null,
+	setReplyToMessage: (m) => set({ replyToMessage: m }),
 }));
 
 export interface IMessage {
@@ -37,6 +42,7 @@ export interface IMessage {
 	messageType: "text" | "image" | "video";
 	deliveredTo?: Id<"users">[];
 	seenBy?: Id<"users">[];
+	replyTo?: { _id: Id<"messages">; content: string; sender?: any } | null;
 	sender: {
 		_id: Id<"users">;
 		image: string;

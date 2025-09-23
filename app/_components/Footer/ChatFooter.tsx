@@ -9,11 +9,12 @@ import EmojiPicker, { Theme } from "emoji-picker-react";
 import { Button } from "@/components/ui/button";
 import MediaDropdown from "./utils/media-dropdown";
 import TextareaAutoSize from "react-textarea-autosize";
-import { Smile, SendHorizonal, Mic } from "lucide-react";
+import { Smile, SendHorizonal, Mic, X } from "lucide-react";
 
 const ChatFooter = () => {
   const [msgText, setMsgText] = useState("");
   const { selectedConversation } = useConversationStore();
+  const { replyToMessage, setReplyToMessage } = useConversationStore();
   const { ref, isComponentVisible, setIsComponentVisible } =
     useComponentVisible(false);
 
@@ -32,7 +33,10 @@ const ChatFooter = () => {
         content: msgText.trim(),
         conversation: selectedConversation!._id,
         sender: me!._id,
+        replyTo: replyToMessage?.id as any,
       });
+      // clear reply state
+      if (replyToMessage) setReplyToMessage(null);
       setMsgText("");
     } catch (err: any) {
       toast.error(err.message);
@@ -76,8 +80,31 @@ const ChatFooter = () => {
         {/* Input + Media */}
         <form
           onSubmit={handleSendTextMsg}
-          className="flex items-end gap-2 w-full pb-2"
+          className="flex flex-col gap-2 w-full pb-2"
         >
+          {/* Reply preview bubble */}
+          {replyToMessage && (
+            <div className="w-full flex items-center justify-between gap-2 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-md px-3 py-2">
+              <div className="flex items-start gap-3">
+                <div className="w-1.5 h-6 rounded bg-primary/80 mt-0.5" />
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-muted-foreground">Replying to</span>
+                  <span className="text-sm truncate max-w-[520px]">{replyToMessage.content}</span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setReplyToMessage(null)}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                aria-label="Cancel reply"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          <div className="flex items-end gap-2 w-full">
           <TextareaAutoSize
             rows={1}
             maxRows={5}
@@ -117,6 +144,7 @@ const ChatFooter = () => {
               <Mic className="w-5 h-5" />
             )}
           </Button>
+          </div>
         </form>
       </div>
     </div>
