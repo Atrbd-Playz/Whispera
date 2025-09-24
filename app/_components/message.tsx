@@ -590,6 +590,11 @@ const ReplyPreview = ({ replyTo, isMine }: { replyTo?: any; isMine?: boolean }) 
 
   // Always declare hooks first, then bail out inside effects / render if there's no replyTo.
   useEffect(() => {
+    if (explicitType) {
+      setDetectedType(explicitType);
+      if (explicitType === "video") attemptCapturePoster(rawContent, setPoster);
+      return;
+    }
 
     if (!rawContent) {
       setDetectedType("text");
