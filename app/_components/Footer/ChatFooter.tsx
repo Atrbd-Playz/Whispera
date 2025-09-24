@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { motion } from "framer-motion";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { useConversationStore } from "@/store/chat-store";
@@ -9,12 +10,14 @@ import EmojiPicker, { Theme } from "emoji-picker-react";
 import { Button } from "@/components/ui/button";
 import MediaDropdown from "./utils/media-dropdown";
 import TextareaAutoSize from "react-textarea-autosize";
-import { Smile, SendHorizonal, Mic, X } from "lucide-react";
+import { Smile, SendHorizonal, Mic, X, Play } from "lucide-react";
+import Image from "next/image";
 
 const ChatFooter = () => {
   const [msgText, setMsgText] = useState("");
   const { selectedConversation } = useConversationStore();
   const { replyToMessage, setReplyToMessage } = useConversationStore();
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const { ref, isComponentVisible, setIsComponentVisible } =
     useComponentVisible(false);
 
@@ -46,8 +49,21 @@ const ChatFooter = () => {
     }
   };
 
+  // autofocus textarea when reply is set
+  useEffect(() => {
+    if (replyToMessage && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [replyToMessage]);
+
   return (
-    <div className="w-full sticky bottom-0 z-20 shadow-md bg-background pt-1 rounded-md">
+    <motion.footer
+      initial={{ y: 50, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      className="w-full sticky bottom-0 z-20 shadow-md bg-background pt-1 rounded-md"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+    >
       <div className="flex justify-between bg-gray-50 dark:bg-accent rounded-md items-center gap-2 px-2">
         {/* Emoji Picker */}
         <div ref={ref} className="relative flex-shrink-0">
@@ -84,18 +100,39 @@ const ChatFooter = () => {
         >
           {/* Reply preview bubble */}
           {replyToMessage && (
-            <div className="w-full flex items-center justify-between gap-2 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-md px-3 py-2">
-              <div className="flex items-start gap-3">
-                <div className="w-1.5 h-6 rounded bg-primary/80 mt-0.5" />
-                <div className="flex flex-col">
+            <div className="w-full flex items-center text-wrap justify-between gap-2 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-md px-3 py-2">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-1.5 h-6 rounded bg-primary/80 mt-0.5 flex-shrink-0" />
+                {/* thumbnail (image) or generic video thumbnail */}
+                {replyToMessage.messageType === "image" ? (
+                  <div className="flex-shrink-0">
+                    <Image src={replyToMessage.content} alt="thumb" width={56} height={56} className="rounded-md object-cover" />
+                  </div>
+                ) : replyToMessage.messageType === "video" ? (
+                  <div className="flex-shrink-0 w-14 h-10 relative rounded-md overflow-hidden bg-black/5">
+                    {/* fallback generic thumbnail with play icon overlay */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="w-8 h-8 bg-black/50 rounded-full flex items-center justify-center">
+                        <Play className="w-4 h-4 text-white" />
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="flex flex-col min-w-0">
                   <span className="text-[11px] text-muted-foreground">Replying to</span>
-                  <span className="text-sm truncate max-w-[520px]">{replyToMessage.content}</span>
+                  <span className="text-sm truncate max-w-[70vw] sm:max-w-[520px]">
+                    {replyToMessage.messageType === "text" ? replyToMessage.content : replyToMessage.messageType === "image" ? "Photo" : replyToMessage.messageType === "video" ? "Video" : ""}
+                  </span>
                 </div>
               </div>
 
               <button
                 type="button"
-                onClick={() => setReplyToMessage(null)}
+                onClick={() => {
+                  setReplyToMessage(null);
+                  if (textareaRef.current) textareaRef.current.focus();
+                }}
                 className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                 aria-label="Cancel reply"
               >
@@ -109,6 +146,7 @@ const ChatFooter = () => {
             rows={1}
             maxRows={5}
             placeholder="Type a message"
+            ref={textareaRef}
             className="flex-grow px-0 py-2 text-sm rounded-[2px] dark:bg-zinc-800 border-b-[1px] rounded-t-md border-primary-foreground font-normal focus:outline-none focus:border-primary resize-none max-h-28"
             value={msgText}
             onChange={(e) => setMsgText(e.target.value)}
@@ -116,6 +154,13 @@ const ChatFooter = () => {
               const isMobile = /iPhone|iPad|iPod|Android/i.test(
                 navigator.userAgent
               );
+
+              if (e.key === "Escape") {
+                // cancel reply and focus textarea
+                if (replyToMessage) setReplyToMessage(null);
+                if (textareaRef.current) textareaRef.current.focus();
+                return;
+              }
 
               if (!isMobile) {
                 if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey) {
@@ -132,22 +177,24 @@ const ChatFooter = () => {
           <MediaDropdown />
 
           {/* Send / Mic button */}
-          <Button
-            type="submit"
-            size="icon"
-            disabled={isSending}
-            className="flex-shrink-0 w-11 h-11 rounded-full bg-primary/70 text-gray-100 hover:bg-primary/60 transition-transform duration-200 disabled:opacity-60"
-          >
-            {msgText.length > 0 ? (
-              <SendHorizonal className="w-5 h-5" />
-            ) : (
-              <Mic className="w-5 h-5" />
-            )}
-          </Button>
+          <motion.div whileTap={{ scale: 0.95 }}>
+            <Button
+              type="submit"
+              size="icon"
+              disabled={isSending}
+              className="flex-shrink-0 w-11 h-11 rounded-full bg-primary/70 text-gray-100 hover:bg-primary/60 transition-transform duration-200 disabled:opacity-60"
+            >
+              {msgText.length > 0 ? (
+                <SendHorizonal className="w-5 h-5" />
+              ) : (
+                <Mic className="w-5 h-5" />
+              )}
+            </Button>
+          </motion.div>
           </div>
         </form>
       </div>
-    </div>
+    </motion.footer>
   );
 };
 

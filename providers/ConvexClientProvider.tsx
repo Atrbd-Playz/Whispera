@@ -18,7 +18,7 @@ const convex = new ConvexReactClient(CONVEX_URL);
 const ConvexClientProvider = ({ children }: Props) => (
   <ClerkProvider>
     <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-      <AnimatePresence mode="wait" initial={false}>
+  <AnimatePresence initial={false}>
         {/* Show children when authenticated */}
         <Authenticated key="auth">
           {children}

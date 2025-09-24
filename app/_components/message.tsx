@@ -1,6 +1,7 @@
 import { MessageSeenSvg, MessageSentSvg } from "@/lib/svgs";
 import { IMessage, useConversationStore } from "@/store/chat-store";
 import { useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import Image from "next/image";
 import DateIndicator from "./date-indicator";
 import ChatBubbleAvatar from "./chat-buble-avatar";
@@ -142,13 +143,15 @@ const Message = ({ me, message, previousMessage }: ChatBubbleProps) => {
   const renderMessageContent = () => {
     switch (message.messageType) {
       case "text":
-        return <TextMessage message={message} replyTo={message.replyTo} />;
+        return <TextMessage message={message} replyTo={message.replyTo} replyToIsMine={message.replyTo?.sender?._id === me._id} />;
       case "image":
         return (
           <ImageMessage
             message={message}
             time={time}
             fromMe={fromMe}
+            replyTo={message.replyTo}
+            replyToIsMine={message.replyTo?.sender?._id === me._id}
             handleClick={() => setOpenImage(true)}
           />
         );
@@ -158,6 +161,8 @@ const Message = ({ me, message, previousMessage }: ChatBubbleProps) => {
             message={message}
             time={time}
             fromMe={fromMe}
+            replyTo={message.replyTo}
+            replyToIsMine={message.replyTo?.sender?._id === me._id}
             handleClick={() => setOpenVideo(true)}
           />
         );
@@ -173,8 +178,7 @@ const Message = ({ me, message, previousMessage }: ChatBubbleProps) => {
 
 
       <div
-        className={`flex gap-1 w-2/3 ${fromMe ? "ml-auto justify-end" : "justify-start"
-          }`}
+        className={`flex gap-1 w-full ${fromMe ? "justify-end" : "justify-start"}`}
       >
         {/* ✅ Only show avatar+name if it's a group AND not from me */}
         {isGroup && !fromMe && (
@@ -186,9 +190,12 @@ const Message = ({ me, message, previousMessage }: ChatBubbleProps) => {
           />
         )}
 
-        <div
-          className={`flex flex-col z-20 max-w-fit ${message.messageType === "text" ? "px-2 pt-1" : ""
-            } rounded-md shadow-md relative ${bgClass}`}
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.18 }}
+          className={`flex flex-col z-20 max-w-[80%] sm:max-w-[66%] ${message.messageType === "text" ? "px-2 pt-1" : ""} rounded-md shadow-md relative ${bgClass} break-words overflow-hidden`}
           style={{ transform: `translateX(${translateX}px)`, transition: draggingRef.current ? "none" : "transform 120ms ease-out" }}
           onMouseEnter={() => setShowTrigger(true)}
           onMouseLeave={() => setShowTrigger(false)}
@@ -233,7 +240,7 @@ const Message = ({ me, message, previousMessage }: ChatBubbleProps) => {
               if ((shouldHandleRight && dx > 80) || (!shouldHandleRight && dx < -80)) {
                 // swipe -> set reply (direction depends on sender)
                 const { setReplyToMessage } = useConversationStore.getState();
-                setReplyToMessage({ id: (message as any)._id as any, content: message.content });
+                setReplyToMessage({ id: (message as any)._id as any, content: message.content, messageType: message.messageType });
               }
             }
             // reset visual translate with a small delay for UX
@@ -275,7 +282,7 @@ const Message = ({ me, message, previousMessage }: ChatBubbleProps) => {
               seen={isSeen}
             />
           )}
-        </div>
+        </motion.div>
       </div>
     </>
   );
@@ -285,15 +292,20 @@ export default Message;
 /** ---------- BUBBLES ---------- **/
 
 // Video bubble with overlay time + ticks (bottom-right)
+// (ReplyPreview moved above bubbles)
 const VideoMessage = ({
   message,
   time,
   fromMe,
+  replyTo,
+  replyToIsMine,
   handleClick,
 }: {
   message: IMessage;
   time: string;
   fromMe: boolean;
+  replyTo?: any;
+  replyToIsMine?: boolean;
   handleClick: () => void;
 }) => {
   const [duration, setDuration] = useState<string>("");
@@ -311,10 +323,12 @@ const VideoMessage = ({
   }, [message.content]);
 
   return (
-    <div
-      className="relative w-[250px] h-[300px] rounded-sm overflow-hidden bg-zinc-950 cursor-pointer shadow-sm border"
-      onClick={handleClick}
-    >
+    <div className="w-full">
+      <ReplyPreview replyTo={replyTo} isMine={!!replyToIsMine} />
+      <div
+        className="relative w-[250px] h-[300px] rounded-sm overflow-hidden bg-zinc-950 cursor-pointer shadow-sm border"
+        onClick={handleClick}
+      >
       <video
         src={message.content}
         className="w-full h-full object-cover"
@@ -340,6 +354,7 @@ const VideoMessage = ({
         <span>{time}</span>
         {fromMe && <Ticks message={message} />}
       </div>
+      </div>
     </div>
   );
 };
@@ -349,30 +364,38 @@ const ImageMessage = ({
   time,
   fromMe,
   message,
+  replyTo,
+  replyToIsMine,
   handleClick,
 }: {
   message: IMessage;
   time: string;
   fromMe: boolean;
+  replyTo?: any;
+  replyToIsMine?: boolean;
   handleClick: () => void;
 }) => {
   return (
-    <div
-      className="relative max-w-[280px] max-h-[320px] sm:w-[240px] sm:h-[280px] w-[180px] h-[240px] flex items-center justify-center overflow-hidden rounded-sm dark:bg-neutral-800 bg-slate-100 cursor-pointer shadow-sm border dark:border-neutral-700"
-      onClick={handleClick}
-    >
-      <Image
-        src={message.content}
-        fill
-        className="object-contain rounded-sm"
-        alt="image"
-        sizes="(max-width: 640px) 180px, 240px"
-      />
+    <div className="w-full">
+      <ReplyPreview replyTo={replyTo} isMine={!!replyToIsMine} />
 
-      {/* overlay time + ticks */}
-      <div className="absolute bottom-1 right-2 flex items-center gap-1 text-[11px] text-white bg-black/40 px-1 rounded">
-        <span>{time}</span>
-        {fromMe && <Ticks message={message} />}
+      <div
+        className="relative max-w-[280px] max-h-[320px] sm:w-[240px] sm:h-[280px] w-[180px] h-[240px] flex items-center justify-center overflow-hidden rounded-sm dark:bg-neutral-800 bg-slate-100 cursor-pointer shadow-sm border dark:border-neutral-700"
+        onClick={handleClick}
+      >
+        <Image
+          src={message.content}
+          fill
+          className="object-cover rounded-sm"
+          alt="image"
+          sizes="(max-width: 640px) 180px, 240px"
+        />
+
+        {/* overlay time + ticks */}
+        <div className="absolute bottom-1 right-2 flex items-center gap-1 text-[11px] text-white bg-black/40 px-1 rounded">
+          <span>{time}</span>
+          {fromMe && <Ticks message={message} />}
+        </div>
       </div>
     </div>
   );
@@ -401,7 +424,7 @@ const MessageTime = ({ time, fromMe, delivered, seen }: { time: string; fromMe: 
   );
 };
 
-const TextMessage = ({ message, replyTo }: { message: IMessage; replyTo?: any }) => {
+const TextMessage = ({ message, replyTo, replyToIsMine }: { message: IMessage; replyTo?: any; replyToIsMine?: boolean }) => {
   const [expanded, setExpanded] = useState(false);
 
   // Regex patterns
@@ -420,13 +443,7 @@ const TextMessage = ({ message, replyTo }: { message: IMessage; replyTo?: any })
 
   return (
     <div className="w-full">
-      {/* Quoted reply preview */}
-      {replyTo && (
-        <div className="border-l-2 border-gray-300 dark:border-zinc-600 pl-2 mb-1 text-xs text-gray-600 dark:text-gray-300">
-          <div className="font-medium text-[12px]">{replyTo.sender?.name || 'Unknown'}</div>
-          <div className="truncate">{replyTo.content}</div>
-        </div>
-      )}
+  <ReplyPreview replyTo={replyTo} isMine={!!replyToIsMine} />
       <p
         className={`mr-2 text-sm font-light whitespace-pre-wrap break-words break-all ${
           !expanded && isLong ? "line-clamp-5" : ""
@@ -501,5 +518,173 @@ const TextMessage = ({ message, replyTo }: { message: IMessage; replyTo?: any })
         </button>
       )}
     </div>
+  );
+};
+
+// Reusable reply preview component used by text/image/video bubbles
+// Helper: try to capture a poster frame from a video URL (best-effort)
+const attemptCapturePoster = (videoUrl: string, setPoster: (s: string | null) => void) => {
+  if (!videoUrl) return;
+  try {
+    const v = document.createElement("video");
+    v.crossOrigin = "anonymous";
+    v.preload = "metadata";
+    v.muted = true;
+    v.playsInline = true;
+    const cleanup = () => {
+      try { v.pause(); v.src = ""; } catch (_) {}
+    };
+    const onLoaded = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = v.videoWidth || 160;
+        canvas.height = v.videoHeight || 90;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+          const data = canvas.toDataURL("image/png");
+          setPoster(data);
+        }
+      } catch (_) {
+        // ignore
+      } finally {
+        cleanup();
+      }
+    };
+    v.onloadeddata = onLoaded;
+    v.onerror = cleanup;
+    v.src = videoUrl;
+    // try to load
+    void v.play?.().catch(() => {});
+    // fallback timeout
+    setTimeout(() => {
+      cleanup();
+    }, 2500);
+  } catch (e) {
+    // ignore
+  }
+};
+
+// Reusable reply preview component used by text/image/video bubbles
+const ReplyPreview = ({ replyTo, isMine }: { replyTo?: any; isMine?: boolean }) => {
+  // compute safe values before hooks (so hooks order is stable)
+  const rawContent = typeof (replyTo as any)?.content === "string" ? (replyTo as any).content : "";
+  const explicitType = (replyTo as any)?.messageType;
+
+  // hooks must be called unconditionally
+  const [detectedType, setDetectedType] = useState<string | null>(explicitType || null);
+  const [poster, setPoster] = useState<string | null>(null);
+
+  // If there's no replyTo, render nothing — but hooks already ran above so rules are satisfied
+  if (!replyTo) return null;
+
+  useEffect(() => {
+    if (explicitType) {
+      setDetectedType(explicitType);
+      if (explicitType === "video") attemptCapturePoster(rawContent, setPoster);
+      return;
+    }
+
+    if (!rawContent) {
+      setDetectedType("text");
+      return;
+    }
+
+    let cancelled = false;
+
+    const inferTypeFromUrl = (url: string) => {
+      if (!url) return null;
+      const lower = url.split("?")[0].toLowerCase();
+      if (lower.match(/\.(jpe?g|png|gif|webp|avif|bmp)$/)) return "image";
+      if (lower.match(/\.(mp4|mov|webm|mkv|flv|avi|ogg)$/)) return "video";
+      return null;
+    };
+
+    const runDetection = async () => {
+      const byUrl = inferTypeFromUrl(rawContent);
+      if (byUrl) {
+        setDetectedType(byUrl);
+        if (byUrl === "video") attemptCapturePoster(rawContent, setPoster);
+        return;
+      }
+
+      try {
+        const res = await fetch(rawContent, { method: "HEAD" });
+        const ct = (res.headers.get("content-type") || "").toLowerCase();
+        if (cancelled) return;
+        if (ct.startsWith("image/")) setDetectedType("image");
+        else if (ct.startsWith("video/")) {
+          setDetectedType("video");
+          attemptCapturePoster(rawContent, setPoster);
+        } else setDetectedType("text");
+        return;
+      } catch (err) {
+        // fallback: try loading as image then video
+  const img = new window.Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => { if (!cancelled) setDetectedType("image"); };
+        img.onerror = () => {
+          const v = document.createElement("video");
+          v.preload = "metadata";
+          v.onloadedmetadata = () => { if (!cancelled) { setDetectedType("video"); attemptCapturePoster(rawContent, setPoster); } };
+          v.onerror = () => { if (!cancelled) setDetectedType("text"); };
+          v.src = rawContent;
+        };
+        img.src = rawContent;
+      }
+    };
+
+    runDetection();
+    return () => { cancelled = true; };
+  }, [rawContent, explicitType]);
+
+  const leftBorderColor = isMine ? "border-emerald-400" : "border-sky-400";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.14 }}
+      className={`border-l-[3px] pl-3 pr-3 py-2 mb-2 bg-white/60 dark:bg-zinc-800/30 text-gray-800 dark:text-gray-200 w-full max-w-full rounded-e-sm rounded shadow-sm ${leftBorderColor}`}
+    >
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-3">
+          {(detectedType === "image" && rawContent) && (
+            <motion.div whileHover={{ scale: 1.03 }} className="w-16 h-16 rounded-lg overflow-hidden shadow-md ring-1 ring-black/5 flex-shrink-0">
+              <Image src={rawContent} alt="thumb" width={64} height={64} className="object-cover w-full h-full" />
+            </motion.div>
+          )}
+
+          {(detectedType === "video" && rawContent) && (
+            <motion.div whileHover={{ scale: 1.03 }} className="w-16 h-16 rounded-lg overflow-hidden shadow-md ring-1 ring-black/5 relative flex-shrink-0 bg-black/5">
+              {poster ? (
+                <Image src={poster} alt="poster" width={64} height={64} className="object-cover w-full h-full" />
+              ) : (
+                <video src={rawContent} className="w-full h-full object-cover" muted playsInline preload="metadata" />
+              )}
+
+              <div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent" />
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-8 h-8 bg-white/20 backdrop-blur-sm border border-white/10 rounded-full flex items-center justify-center">
+                  <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          <div className="min-w-0">
+            <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 truncate">{isMine ? 'You' : (replyTo.sender?.name || 'Unknown')}</div>
+            <div className="text-sm text-gray-600 dark:text-gray-400 truncate mt-1">
+              {detectedType === 'image' ? 'Photo' : detectedType === 'video' ? 'Video' : (rawContent || '')}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
+          {detectedType === 'image' && <span className="px-2 py-1 bg-white/30 dark:bg-black/20 rounded">Image</span>}
+          {detectedType === 'video' && <span className="px-2 py-1 bg-white/30 dark:bg-black/20 rounded">Video</span>}
+        </div>
+      </div>
+    </motion.div>
   );
 };
