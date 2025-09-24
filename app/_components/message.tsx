@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
 import DateIndicator from "./date-indicator";
-import ChatBubbleAvatar from "./chat-buble-avatar";
+
 import ChatAvatarActions from "./Chat-avatar-action";
 import { ImageDialog } from "./ImageDialog";
 import VideoDialog from "./VideoDialog";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import ChatBubbleAvatar from "./chat-buble-avatar";
 
 type ChatBubbleProps = {
   message: IMessage;
@@ -195,6 +196,7 @@ const Message = ({ me, message, previousMessage }: ChatBubbleProps) => {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -6 }}
           transition={{ duration: 0.18 }}
+          /* removed pr-10 padding so design isn't changed; actions are absolutely positioned */
           className={`flex flex-col z-20 max-w-[80%] sm:max-w-[66%] ${message.messageType === "text" ? "px-2 pt-1" : ""} rounded-md shadow-md relative ${bgClass} break-words overflow-hidden`}
           style={{ transform: `translateX(${translateX}px)`, transition: draggingRef.current ? "none" : "transform 120ms ease-out" }}
           onMouseEnter={() => setShowTrigger(true)}
@@ -254,7 +256,18 @@ const Message = ({ me, message, previousMessage }: ChatBubbleProps) => {
             setActionsOpen(true);
           }}
         >
-          <ChatAvatarActions message={message} me={me} open={actionsOpen} onOpenChange={setActionsOpen} showTrigger={showTrigger} />
+          {/* absolute container so opening doesn't change layout/width of bubble content
+              pass compact flag so ChatAvatarActions doesn't render the sender/name fragment (avoids reflow) */}
+          <div className="absolute top-1  z-30">
+            <ChatAvatarActions
+              message={message}
+              me={me}
+              open={actionsOpen}
+              onOpenChange={setActionsOpen}
+              showTrigger={showTrigger}
+              compact
+            />
+          </div>
           {renderMessageContent()}
 
           {/* dialogs */}
@@ -575,15 +588,8 @@ const ReplyPreview = ({ replyTo, isMine }: { replyTo?: any; isMine?: boolean }) 
   const [detectedType, setDetectedType] = useState<string | null>(explicitType || null);
   const [poster, setPoster] = useState<string | null>(null);
 
-  // If there's no replyTo, render nothing — but hooks already ran above so rules are satisfied
-  if (!replyTo) return null;
-
+  // Always declare hooks first, then bail out inside effects / render if there's no replyTo.
   useEffect(() => {
-    if (explicitType) {
-      setDetectedType(explicitType);
-      if (explicitType === "video") attemptCapturePoster(rawContent, setPoster);
-      return;
-    }
 
     if (!rawContent) {
       setDetectedType("text");
@@ -603,6 +609,7 @@ const ReplyPreview = ({ replyTo, isMine }: { replyTo?: any; isMine?: boolean }) 
     const runDetection = async () => {
       const byUrl = inferTypeFromUrl(rawContent);
       if (byUrl) {
+        if (cancelled) return;
         setDetectedType(byUrl);
         if (byUrl === "video") attemptCapturePoster(rawContent, setPoster);
         return;
@@ -612,31 +619,57 @@ const ReplyPreview = ({ replyTo, isMine }: { replyTo?: any; isMine?: boolean }) 
         const res = await fetch(rawContent, { method: "HEAD" });
         const ct = (res.headers.get("content-type") || "").toLowerCase();
         if (cancelled) return;
-        if (ct.startsWith("image/")) setDetectedType("image");
-        else if (ct.startsWith("video/")) {
+        if (ct.startsWith("image/")) {
+          setDetectedType("image");
+        } else if (ct.startsWith("video/")) {
           setDetectedType("video");
           attemptCapturePoster(rawContent, setPoster);
-        } else setDetectedType("text");
+        } else {
+          setDetectedType("text");
+        }
         return;
       } catch (err) {
         // fallback: try loading as image then video
-  const img = new window.Image();
-        img.crossOrigin = "anonymous";
-        img.onload = () => { if (!cancelled) setDetectedType("image"); };
+        if (cancelled) return;
+        const img = new window.Image();
+        img.onload = () => {
+          if (cancelled) return;
+          setDetectedType("image");
+        };
         img.onerror = () => {
+          if (cancelled) return;
+          // try video by attempting to load metadata
           const v = document.createElement("video");
           v.preload = "metadata";
-          v.onloadedmetadata = () => { if (!cancelled) { setDetectedType("video"); attemptCapturePoster(rawContent, setPoster); } };
-          v.onerror = () => { if (!cancelled) setDetectedType("text"); };
-          v.src = rawContent;
+          v.onloadedmetadata = () => {
+            if (cancelled) return;
+            setDetectedType("video");
+            attemptCapturePoster(rawContent, setPoster);
+          };
+          v.onerror = () => {
+            if (cancelled) return;
+            setDetectedType("text");
+          };
+          try {
+            v.src = rawContent;
+          } catch (_) {
+            if (!cancelled) setDetectedType("text");
+          }
         };
-        img.src = rawContent;
+        try {
+          img.src = rawContent;
+        } catch (_) {
+          if (!cancelled) setDetectedType("text");
+        }
       }
     };
 
     runDetection();
     return () => { cancelled = true; };
-  }, [rawContent, explicitType]);
+  }, [rawContent, explicitType, replyTo]);
+
+  // If there's no replyTo, render nothing — hooks/effects already ran above so rules are satisfied
+  if (!replyTo) return null;
 
   const leftBorderColor = isMine ? "border-emerald-400" : "border-sky-400";
 

@@ -23,9 +23,11 @@ type ChatAvatarActionsProps = {
   onOpenChange?: (open: boolean) => void;
   // Whether to render the three-dot trigger (Message will control visibility via CSS)
   showTrigger?: boolean;
+  // When true, render a compact actions UI (no sender/name label) to avoid layout shifts when placed absolutely
+  compact?: boolean;
 };
 
-const ChatAvatarActions = ({ me, message, open: openProp, onOpenChange, showTrigger = true }: ChatAvatarActionsProps) => {
+const ChatAvatarActions = ({ me, message, open: openProp, onOpenChange, showTrigger = true, compact = false }: ChatAvatarActionsProps) => {
   const { selectedConversation, setSelectedConversation, setReplyToMessage } = useConversationStore();
   const unsend = useMutation(api.messages.unsendMessage);
 
@@ -134,7 +136,13 @@ const ChatAvatarActions = ({ me, message, open: openProp, onOpenChange, showTrig
         <DropdownMenuContent sideOffset={6} className="w-44">
             <DropdownMenuItem
               onClick={() => {
-                setReplyToMessage({ id: (message as any)._id as any, content: message.content });
+                // pass full reply metadata so ReplyPreview can show text/image/video + sender name
+                setReplyToMessage({
+                  id: (message as any)._id as any,
+                  content: message.content,
+                  messageType: message.messageType,
+                  sender: (message as any).sender || null,
+                } as any);
                 setOpen(false);
               }}
               className="flex items-center gap-2"
@@ -165,8 +173,8 @@ const ChatAvatarActions = ({ me, message, open: openProp, onOpenChange, showTrig
 
           </DropdownMenuContent>
         </DropdownMenu>
-      {/* ✅ Only render sender name in group chats if it's NOT me */}
-      {isGroup && !fromMe && (
+      {/* ✅ Only render sender name in group chats if it's NOT me and not in compact mode */}
+      {!compact && isGroup && !fromMe && (
         <div
           className="text-[11px] flex items-center gap-2 font-bold cursor-pointer group hover:text-primary transition"
           onClick={() => setOpen(true)}

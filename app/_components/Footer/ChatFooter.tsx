@@ -144,6 +144,7 @@ const ChatFooter = () => {
           <div className="flex items-end gap-2 w-full">
           <TextareaAutoSize
             rows={1}
+            autoFocus
             maxRows={5}
             placeholder="Type a message"
             ref={textareaRef}
