@@ -15,7 +15,7 @@ const MobileNav = () => {
   if (useChat().isActive) return null;
 
   return (
-    <Card className="fixed bottom-0 rounded-lg w-full flex items-center p-2 sm:hidden dark:bg-zinc-800">
+    <Card className="fixed bottom-0 rounded-lg w-full z-30 flex items-center p-2 sm:hidden dark:bg-zinc-800">
       <nav className="w-full">
         <ul className="flex justify-around items-center">
           {path.map((path, id) => (
