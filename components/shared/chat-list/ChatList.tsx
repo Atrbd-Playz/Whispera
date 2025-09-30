@@ -70,7 +70,7 @@ const ChatList = ({ children, title, action: Action, SearchPlaceholder }: Props)
   return (
     <Card
       className={cn(
-        "h-full divide-y divide-divider w-full lg:flex-none lg:w-80 p-2 bg-accent lg:block lg:border-x-[1px] lg:border-divider-darker lg:rounded-l-sm sm:rounded-sm",
+        "h-full divide-y overflow-hidden divide-divider w-full lg:flex-none lg:w-80 p-2 bg-accent lg:block lg:border-x-[1px] lg:border-divider-darker lg:rounded-l-sm sm:rounded-sm",
         { hidden: isActive }
       )}
     >
